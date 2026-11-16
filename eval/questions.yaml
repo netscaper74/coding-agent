@@ -1,0 +1,67 @@
+# Eval set for the demo repos. Run: docker compose run --rm eval  (or "Run eval" in the dashboard)
+# expect_paths   any of these files should be retrieved and cited
+# expect_clauses these standard clauses should be retrieved
+# forbid_repos   nothing from these repos may be retrieved for this user (permission check)
+
+questions:
+  - id: ledger-validation-rules
+    as_user: alice
+    question: Where are journal entries validated before posting, and which rules are enforced?
+    expect_paths: [payments-svc/src/ledger/validation.py]
+    expect_clauses: [SCS-4.3]
+
+  - id: idempotency
+    as_user: alice
+    question: How does the ledger handle a replayed idempotency key?
+    expect_paths: [payments-svc/src/ledger/posting.py]
+    expect_clauses: [SCS-4.4]
+
+  - id: fx-rounding
+    as_user: alice
+    question: What rounding is used when converting between currencies?
+    expect_paths: [payments-svc/src/fx/rates.py]
+    expect_clauses: [SCS-4.2]
+
+  - id: sql-injection-review
+    as_user: alice
+    question: Review the ledger repository for SQL that violates our coding standard and propose a fix.
+    expect_paths: [payments-svc/src/ledger/repository.py]
+    expect_clauses: [SCS-5.1]
+
+  - id: money-float-violation
+    as_user: alice
+    question: Is daily interest calculated in a way that complies with our money handling rules?
+    expect_paths: [payments-svc/src/ledger/balances.py]
+    expect_clauses: [SCS-4.1]
+
+  - id: logging-pan
+    as_user: alice
+    question: Do any payment handlers log sensitive data?
+    expect_paths: [payments-svc/src/api/handlers.py]
+    expect_clauses: [SCS-3.1]
+
+  - id: reconciliation-java
+    as_user: alice
+    question: How does the nightly reconciliation job detect breaks?
+    expect_paths: [payments-svc/jobs/reconcile/src/main/java/com/acme/recon/ReconciliationJob.java]
+
+  - id: portal-retries
+    as_user: bob
+    question: When does the portal API client retry a failed request?
+    expect_paths: [web-portal/src/api/client.ts]
+
+  - id: portal-xss
+    as_user: bob
+    question: Is the receipt preview in the payment form safe against XSS?
+    expect_paths: [web-portal/src/components/PaymentForm.tsx]
+    expect_clauses: [SCS-8.1]
+
+  - id: gateway-rate-limit
+    as_user: bob
+    question: How is rate limiting implemented in the gateway?
+    expect_paths: [web-portal/gateway/main.go]
+
+  - id: acl-bob-no-ledger
+    as_user: bob
+    question: How are ledger account balances computed?
+    forbid_repos: [payments-svc]

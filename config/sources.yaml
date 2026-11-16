@@ -1,0 +1,32 @@
+# What gets indexed. Each repo carries an access scope; developers only retrieve
+# chunks whose scope matches one of their groups (see users.yaml).
+
+repos:
+  - name: payments-svc
+    source: local
+    path: /data/sample-repos/payments-svc
+    branch: main
+    access_scope: ["group:finance"]
+
+  - name: web-portal
+    source: local
+    path: /data/sample-repos/web-portal
+    branch: main
+    access_scope: ["group:engineering"]
+
+  # A real GitLab project (needs GITLAB_URL / GITLAB_TOKEN in .env):
+  # - name: billing-api
+  #   source: gitlab
+  #   project: platform/billing-api     # path_with_namespace or numeric project id
+  #   branch: main                      # optional, defaults to the project's default branch
+  #   access_scope: ["group:platform"]
+
+standards:
+  - name: ACME Secure Coding Standard
+    id: ACME-SCS
+    version: "2026.1"
+    path: /data/standards/acme-secure-coding.md
+    access_scope: ["public"]
+
+include_extensions: [".py", ".ts", ".tsx", ".js", ".jsx", ".java", ".go", ".cs", ".sql", ".yaml", ".yml", ".md"]
+max_file_bytes: 200000

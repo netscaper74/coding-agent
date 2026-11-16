@@ -1,0 +1,416 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Repo Agent Architecture</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  /* Layout: one wide blueprint diagram (customer network | compose host | cloud services), then numbered flow steps and a component reference. */
+  :root {
+    --bg: #f6f7f9;
+    --paper: #ffffff;
+    --panel: #f1f3f6;
+    --ink: #121722;
+    --ink-2: #4a5263;
+    --muted: #7c8495;
+    --line: #c9ced8;
+    --zone: #9aa3b2;
+    --req: #2261c4;
+    --idx: #0f8a6a;
+    --mon: #c2620c;
+    --req-wash: #e6eefb;
+    --idx-wash: #e2f3ee;
+    --mon-wash: #fbeee2;
+    --font-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+    --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0e1116; --paper: #151a22; --panel: #1c222c; --ink: #e8ebf1; --ink-2: #b3bac7; --muted: #848c9b;
+      --line: #343c4a; --zone: #566072; --req: #6d9eef; --idx: #3cc39c; --mon: #f0954a;
+      --req-wash: #1a2639; --idx-wash: #13302a; --mon-wash: #35261a; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e1116; --paper: #151a22; --panel: #1c222c; --ink: #e8ebf1; --ink-2: #b3bac7; --muted: #848c9b;
+    --line: #343c4a; --zone: #566072; --req: #6d9eef; --idx: #3cc39c; --mon: #f0954a;
+    --req-wash: #1a2639; --idx-wash: #13302a; --mon-wash: #35261a; color-scheme: dark;
+  }
+  body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5; }
+  .wrap { max-width: 1320px; margin: 0 auto; padding-block: 32px 56px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 28px; }
+  header { display: grid; gap: 6px; }
+  .eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { font-family: var(--font-display); font-weight: 600; font-size: clamp(28px, 4vw, 40px); line-height: 1.1; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+  .lede { margin: 0; color: var(--ink-2); max-width: 72ch; }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 13.5px; color: var(--ink-2); }
+  .legend span { display: inline-flex; align-items: center; gap: 8px; }
+  .legend i { width: 22px; height: 0; border-top: 2.5px solid var(--c); display: inline-block; }
+  .legend i.dash { border-top-style: dashed; }
+
+  .diagram { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; overflow-x: auto; }
+  .diagram svg { display: block; min-width: 1100px; width: 100%; height: auto; }
+
+  /* svg styling */
+  .zone { fill: none; stroke: var(--zone); stroke-width: 1; stroke-dasharray: 5 5; }
+  .zone-label { fill: var(--muted); font: 600 11px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+  .box { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
+  .box.service { fill: var(--paper); stroke: var(--ink-2); stroke-width: 1.2; }
+  .mod { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
+  .mod.retr { fill: var(--req-wash); stroke: var(--req); }
+  .mod.ing { fill: var(--idx-wash); stroke: var(--line); }
+  .mod.tel { fill: var(--mon-wash); stroke: var(--line); }
+  .mod.coll { fill: var(--paper); }
+  .t-title { fill: var(--ink); font: 600 14px var(--font-body); }
+  .t-port { fill: var(--muted); font: 500 11.5px var(--font-mono); }
+  .t-mod { fill: var(--ink); font: 600 12px var(--font-mono); }
+  .t-sub { fill: var(--ink-2); font: 400 11px var(--font-body); }
+  .t-note { fill: var(--muted); font: italic 400 11px var(--font-body); }
+  .t-edge { font: 500 10.5px var(--font-mono); }
+  .f { fill: none; stroke-width: 1.8; }
+  .f.r { stroke: var(--req); } .f.i { stroke: var(--idx); } .f.m { stroke: var(--mon); }
+  .f.back { stroke-dasharray: 5 4; }
+  .mk-r { fill: var(--req); } .mk-i { fill: var(--idx); } .mk-m { fill: var(--mon); }
+  .badge circle { stroke: var(--paper); stroke-width: 2; }
+  .badge.r circle { fill: var(--req); } .badge.i circle { fill: var(--idx); } .badge.m circle { fill: var(--mon); }
+  .badge text { fill: var(--paper); font: 600 9.5px var(--font-mono); text-anchor: middle; dominant-baseline: central; }
+  .edge-r { fill: var(--req); } .edge-i { fill: var(--idx); } .edge-m { fill: var(--mon); }
+
+  .flows { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  @media (max-width: 900px) { .flows { grid-template-columns: 1fr; } }
+  .flow { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; min-width: 0; }
+  .flow h2 { font-family: var(--font-display); font-size: 19px; margin: 0 0 4px; display: flex; align-items: center; gap: 10px; }
+  .flow h2 i { width: 12px; height: 12px; border-radius: 50%; background: var(--c); display: inline-block; }
+  .flow > p { margin: 0 0 12px; color: var(--ink-2); font-size: 13.5px; }
+  .flow ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  .flow li { display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: start; font-size: 13.5px; }
+  .flow li b { font-weight: 600; }
+  .step { font: 600 11px var(--font-mono); color: var(--paper); background: var(--c); border-radius: 999px; text-align: center; padding: 2px 0; }
+  code { font-family: var(--font-mono); font-size: .88em; background: var(--panel); padding: 1px 5px; border-radius: 4px; }
+
+  .ref { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; display: grid; gap: 12px; min-width: 0; }
+  .ref h2 { font-family: var(--font-display); font-size: 19px; margin: 0; }
+  .table-wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  th, td { text-align: left; padding: 9px 12px 9px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font: 600 11px var(--font-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  td:first-child { font-family: var(--font-mono); font-size: 12.5px; white-space: nowrap; font-weight: 600; }
+  td.where { white-space: nowrap; color: var(--ink-2); }
+  .boundary { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+  .boundary div { border-left: 3px solid var(--zone); padding: 2px 0 2px 12px; font-size: 13.5px; color: var(--ink-2); }
+  .boundary b { color: var(--ink); display: block; font-weight: 600; }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Coding agent demo · docker compose</div>
+    <h1>Repo Agent architecture</h1>
+    <p class="lede">Every component in the demo and the three flows between them: indexing the repositories, answering a developer in the IDE, and monitoring usage. Badges on the diagram match the numbered steps below.</p>
+    <div class="legend">
+      <span><i style="--c: var(--req)"></i>IDE request flow (R)</span>
+      <span><i style="--c: var(--idx)"></i>Indexing flow (I)</span>
+      <span><i style="--c: var(--mon)"></i>Telemetry and monitoring flow (M)</span>
+      <span><i class="dash" style="--c: var(--ink-2)"></i>Response / return path</span>
+    </div>
+  </header>
+
+  <div class="diagram">
+    <svg viewBox="0 0 1260 820" role="img" aria-labelledby="dtitle">
+      <title id="dtitle">Architecture diagram: developer workstation with Continue, GitLab and admin browser on the customer network; agent-api, ingest, web-ui and tool jobs on the Docker Compose host; OpenAI, Voyage AI and MongoDB Atlas as cloud services.</title>
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-r"/></marker>
+        <marker id="ai" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-i"/></marker>
+        <marker id="am" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-m"/></marker>
+      </defs>
+
+      <!-- zones -->
+      <rect class="zone" x="8" y="14" width="236" height="792" rx="10"/>
+      <text class="zone-label" x="20" y="32">Customer network</text>
+      <rect class="zone" x="262" y="14" width="532" height="792" rx="10"/>
+      <text class="zone-label" x="276" y="32">Docker Compose host</text>
+      <rect class="zone" x="812" y="14" width="440" height="792" rx="10"/>
+      <text class="zone-label" x="826" y="32">Cloud services</text>
+
+      <!-- developer workstation -->
+      <rect class="box" x="20" y="42" width="212" height="300" rx="8"/>
+      <text class="t-title" x="34" y="66">Developer workstation</text>
+      <text class="t-sub" x="34" y="83">VS Code / JetBrains + Continue.dev</text>
+      <rect class="mod" x="34" y="96" width="184" height="56" rx="6"/>
+      <text class="t-mod" x="46" y="117">Chat &amp; Edit</text>
+      <text class="t-sub" x="46" y="134">model: repo-agent</text>
+      <text class="t-sub" x="46" y="147">your token identifies you</text>
+      <rect class="mod" x="34" y="166" width="184" height="40" rx="6"/>
+      <text class="t-mod" x="46" y="184">Apply</text>
+      <text class="t-sub" x="46" y="199">model: repo-agent-apply</text>
+      <rect class="mod" x="34" y="216" width="184" height="40" rx="6"/>
+      <text class="t-mod" x="46" y="234">MCP client</text>
+      <text class="t-sub" x="46" y="249">agent mode tools</text>
+      <rect class="mod" x="34" y="266" width="184" height="40" rx="6"/>
+      <text class="t-mod" x="46" y="284">Dev-data export</text>
+      <text class="t-sub" x="46" y="299">accept / reject, no code</text>
+      <text class="t-note" x="34" y="328">Developer reviews every diff</text>
+
+      <!-- admin browser -->
+      <rect class="box" x="20" y="430" width="212" height="76" rx="8"/>
+      <text class="t-title" x="34" y="456">Admin browser</text>
+      <text class="t-sub" x="34" y="474">Monitoring console + Playground</text>
+      <text class="t-sub" x="34" y="490">admin token</text>
+
+      <!-- gitlab + standards -->
+      <rect class="box" x="20" y="650" width="212" height="76" rx="8"/>
+      <text class="t-title" x="34" y="676">GitLab (on-prem)</text>
+      <text class="t-sub" x="34" y="694">private repos · read-only token</text>
+      <text class="t-sub" x="34" y="710">or local folders (sample repos)</text>
+      <rect class="box" x="20" y="738" width="212" height="56" rx="8"/>
+      <text class="t-title" x="34" y="762">Coding standards</text>
+      <text class="t-sub" x="34" y="780">Markdown, clause IDs (SCS-4.1…)</text>
+
+      <!-- agent-api -->
+      <rect class="box" x="282" y="42" width="494" height="340" rx="8"/>
+      <text class="t-title" x="298" y="66">agent-api</text>
+      <text class="t-port" x="372" y="66">:8000 · Starlette</text>
+      <rect class="mod" x="298" y="78" width="148" height="64" rx="6"/>
+      <text class="t-mod" x="308" y="97">/v1/chat/completions</text>
+      <text class="t-sub" x="308" y="114">OpenAI-compatible API</text>
+      <text class="t-sub" x="308" y="129">/v1/models</text>
+      <rect class="mod" x="456" y="78" width="148" height="64" rx="6"/>
+      <text class="t-mod" x="466" y="97">Prompt builder</text>
+      <text class="t-sub" x="466" y="114">classify action</text>
+      <text class="t-sub" x="466" y="129">inject [S#] context + rules</text>
+      <rect class="mod" x="614" y="78" width="148" height="64" rx="6"/>
+      <text class="t-mod" x="624" y="97">LLM client</text>
+      <text class="t-sub" x="624" y="114">stream, rewrite model name</text>
+      <text class="t-sub" x="624" y="129">add Sources footer</text>
+      <rect class="mod retr" x="298" y="152" width="464" height="62" rx="6"/>
+      <text class="t-mod" x="308" y="172">Hybrid retrieval · permission-aware</text>
+      <text class="t-sub" x="308" y="189">embed query → $vectorSearch ∥ $search, both pre-filtered on access_scope</text>
+      <text class="t-sub" x="308" y="204">→ reciprocal-rank fusion → Voyage rerank → top-k code + 1–3 standard clauses</text>
+      <rect class="mod" x="298" y="224" width="148" height="60" rx="6"/>
+      <text class="t-mod" x="308" y="243">/mcp</text>
+      <text class="t-sub" x="308" y="259">Streamable HTTP, stateless</text>
+      <text class="t-sub" x="308" y="274">4 read-only tools</text>
+      <rect class="mod tel" x="456" y="224" width="148" height="60" rx="6"/>
+      <text class="t-mod" x="466" y="243">/continue/events</text>
+      <text class="t-sub" x="466" y="259">/v1/feedback</text>
+      <text class="t-sub" x="466" y="274">accept / reject outcomes</text>
+      <rect class="mod tel" x="614" y="224" width="148" height="60" rx="6"/>
+      <text class="t-mod" x="624" y="243">/admin/*</text>
+      <text class="t-sub" x="624" y="259">metrics, audit, playground</text>
+      <text class="t-sub" x="624" y="274">eval trigger · admin only</text>
+      <rect class="mod tel" x="298" y="294" width="226" height="40" rx="6"/>
+      <text class="t-mod" x="308" y="312">Usage event writer</text>
+      <text class="t-sub" x="308" y="327">async, one event per request</text>
+      <rect class="mod tel" x="536" y="294" width="226" height="40" rx="6"/>
+      <text class="t-mod" x="546" y="312">Rollup job</text>
+      <text class="t-sub" x="546" y="327">hourly aggregates via $merge</text>
+      <text class="t-note" x="298" y="364">Bearer token → user, team, access scopes (config/users.yaml)</text>
+
+      <!-- web-ui -->
+      <rect class="box" x="282" y="430" width="240" height="96" rx="8"/>
+      <text class="t-title" x="298" y="454">web-ui</text>
+      <text class="t-port" x="352" y="454">:8080 · nginx</text>
+      <text class="t-sub" x="298" y="474">Console: overview, users, quality,</text>
+      <text class="t-sub" x="298" y="489">performance, cost, knowledge, audit</text>
+      <text class="t-sub" x="298" y="504">/api/* proxied to agent-api</text>
+
+      <!-- tools -->
+      <rect class="box" x="282" y="546" width="240" height="88" rx="8"/>
+      <text class="t-title" x="298" y="570">eval · seed</text>
+      <text class="t-port" x="380" y="570">tools profile</text>
+      <text class="t-sub" x="298" y="590">eval: questions.yaml through the</text>
+      <text class="t-sub" x="298" y="605">real agent → eval_runs</text>
+      <text class="t-sub" x="298" y="620">seed: synthetic usage for demos</text>
+
+      <!-- ingest -->
+      <rect class="box" x="542" y="430" width="234" height="364" rx="8"/>
+      <text class="t-title" x="558" y="454">ingest</text>
+      <text class="t-port" x="606" y="454">every 10 min</text>
+      <g>
+        <rect class="mod ing" x="558" y="468" width="202" height="38" rx="6"/>
+        <text class="t-mod" x="568" y="485">1 Read sources</text><text class="t-sub" x="568" y="499">GitLab API / local folders</text>
+        <rect class="mod ing" x="558" y="514" width="202" height="38" rx="6"/>
+        <text class="t-mod" x="568" y="531">2 Skip unchanged</text><text class="t-sub" x="568" y="545">per-file fingerprint</text>
+        <rect class="mod ing" x="558" y="560" width="202" height="38" rx="6"/>
+        <text class="t-mod" x="568" y="577">3 Chunk code</text><text class="t-sub" x="568" y="591">tree-sitter: function / class</text>
+        <rect class="mod ing" x="558" y="606" width="202" height="38" rx="6"/>
+        <text class="t-mod" x="568" y="623">4 Chunk standards</text><text class="t-sub" x="568" y="637">one chunk per clause</text>
+        <rect class="mod ing" x="558" y="652" width="202" height="38" rx="6"/>
+        <text class="t-mod" x="568" y="669">5 Embed in batches</text><text class="t-sub" x="568" y="683">Voyage, input_type=document</text>
+        <rect class="mod ing" x="558" y="698" width="202" height="38" rx="6"/>
+        <text class="t-mod" x="568" y="715">6 Upsert + indexes</text><text class="t-sub" x="568" y="729">chunks, files, ingest_runs</text>
+      </g>
+      <text class="t-note" x="558" y="760">Metadata per chunk: repo, branch, path,</text>
+      <text class="t-note" x="558" y="775">lines, symbol, language, access_scope</text>
+
+      <!-- OpenAI -->
+      <rect class="box service" x="830" y="42" width="180" height="110" rx="8"/>
+      <text class="t-title" x="846" y="66">OpenAI</text>
+      <text class="t-sub" x="846" y="86">Chat Completions</text>
+      <text class="t-sub" x="846" y="102">OPENAI_MODEL (e.g. gpt-5-mini)</text>
+      <text class="t-sub" x="846" y="118">streaming + tool calls</text>
+      <text class="t-note" x="846" y="140">API key stays on the server</text>
+
+      <!-- Voyage -->
+      <rect class="box service" x="830" y="250" width="180" height="300" rx="8"/>
+      <text class="t-title" x="846" y="274">Voyage AI</text>
+      <text class="t-sub" x="846" y="292">direct key or via Atlas</text>
+      <rect class="mod" x="846" y="306" width="148" height="44" rx="6"/>
+      <text class="t-mod" x="856" y="324">voyage-code-3</text><text class="t-sub" x="856" y="340">query embeddings, 1024-d</text>
+      <rect class="mod" x="846" y="358" width="148" height="44" rx="6"/>
+      <text class="t-mod" x="856" y="376">rerank-2.5</text><text class="t-sub" x="856" y="392">top candidates → order</text>
+      <rect class="mod" x="846" y="448" width="148" height="44" rx="6"/>
+      <text class="t-mod" x="856" y="466">voyage-code-3</text><text class="t-sub" x="856" y="482">document embeddings</text>
+      <text class="t-note" x="846" y="530">Receives code chunks</text>
+
+      <!-- Atlas -->
+      <rect class="box service" x="1036" y="42" width="204" height="752" rx="8"/>
+      <text class="t-title" x="1052" y="66">MongoDB Atlas</text>
+      <text class="t-sub" x="1052" y="84">database coding_agent</text>
+      <rect class="mod retr" x="1052" y="98" width="172" height="100" rx="6"/>
+      <text class="t-mod" x="1062" y="117">chunks</text>
+      <text class="t-sub" x="1062" y="134">code, standards, embedding</text>
+      <text class="t-sub" x="1062" y="151">chunks_vector</text><text class="t-sub" x="1062" y="166">  Vector Search, cosine, filters</text>
+      <text class="t-sub" x="1062" y="183">chunks_text · Atlas Search</text>
+      <rect class="mod tel" x="1052" y="210" width="172" height="58" rx="6"/>
+      <text class="t-mod" x="1062" y="229">events</text>
+      <text class="t-sub" x="1062" y="245">time-series, TTL</text>
+      <text class="t-sub" x="1062" y="260">latency, tokens, cost, ACL</text>
+      <rect class="mod tel" x="1052" y="276" width="172" height="42" rx="6"/>
+      <text class="t-mod" x="1062" y="294">outcomes</text><text class="t-sub" x="1062" y="309">accept / reject, TTL</text>
+      <rect class="mod tel" x="1052" y="326" width="172" height="42" rx="6"/>
+      <text class="t-mod" x="1062" y="344">events_rollup</text><text class="t-sub" x="1062" y="359">hourly, read by console</text>
+      <rect class="mod tel" x="1052" y="376" width="172" height="42" rx="6"/>
+      <text class="t-mod" x="1062" y="394">eval_runs · audit</text><text class="t-sub" x="1062" y="409">scores, admin actions</text>
+      <rect class="mod ing" x="1052" y="640" width="172" height="58" rx="6"/>
+      <text class="t-mod" x="1062" y="659">files</text>
+      <text class="t-sub" x="1062" y="675">fingerprint, content, scope</text>
+      <text class="t-sub" x="1062" y="690">serves get_file</text>
+      <rect class="mod ing" x="1052" y="706" width="172" height="42" rx="6"/>
+      <text class="t-mod" x="1062" y="724">ingest_runs</text><text class="t-sub" x="1062" y="739">freshness, errors</text>
+      <text class="t-note" x="1052" y="776">Embeddings + telemetry live here</text>
+
+      <!-- ===== flows ===== -->
+      <!-- R1 chat request -->
+      <path class="f r" d="M218,112 H282" marker-end="url(#ar)"/>
+      <!-- R6 streamed answer -->
+      <path class="f r back" d="M282,134 H218" marker-end="url(#ar)"/>
+      <!-- R7 apply -->
+      <path class="f r" d="M218,186 H282" marker-end="url(#ar)"/>
+      <!-- MCP tools -->
+      <path class="f r" d="M218,236 H282" marker-end="url(#ar)"/>
+      <!-- M1 telemetry -->
+      <path class="f m" d="M218,286 H246 V262 H282" marker-end="url(#am)"/>
+      <!-- R5 OpenAI -->
+      <path class="f r" d="M776,104 H830" marker-end="url(#ar)"/>
+      <path class="f r back" d="M830,126 H776" marker-end="url(#ar)"/>
+      <!-- R3 Atlas search -->
+      <path class="f r" d="M776,176 H1052" marker-end="url(#ar)"/>
+      <text class="t-edge edge-r" x="1024" y="170" text-anchor="end">$vectorSearch + $search</text>
+      <!-- M2 events write -->
+      <path class="f m" d="M776,230 H1052" marker-end="url(#am)"/>
+      <text class="t-edge edge-m" x="1024" y="224" text-anchor="end">events · outcomes · $merge</text>
+      <!-- R2/R4 Voyage query side -->
+      <path class="f r" d="M776,328 H846" marker-end="url(#ar)"/>
+      <path class="f r" d="M776,372 H846" marker-end="url(#ar)"/>
+      <!-- I3 ingest → Voyage documents -->
+      <path class="f i" d="M776,470 H846" marker-end="url(#ai)"/>
+      <!-- I4 ingest → Atlas -->
+      <path class="f i" d="M776,716 H1052" marker-end="url(#ai)"/>
+      <text class="t-edge edge-i" x="1024" y="710" text-anchor="end">upsert chunks + files</text>
+      <!-- I1 GitLab → ingest -->
+      <path class="f i" d="M232,688 H542" marker-end="url(#ai)"/>
+      <text class="t-edge edge-i" x="390" y="680" text-anchor="middle">repository files (read-only API)</text>
+      <!-- I2 standards → ingest -->
+      <path class="f i" d="M232,766 H542" marker-end="url(#ai)"/>
+      <text class="t-edge edge-i" x="390" y="758" text-anchor="middle">standards document</text>
+      <!-- M3 admin browser → web-ui -->
+      <path class="f m" d="M232,468 H282" marker-end="url(#am)"/>
+      <!-- M4 web-ui → agent-api admin -->
+      <path class="f m" d="M402,430 V382" marker-end="url(#am)"/>
+      <text class="t-edge edge-m" x="418" y="410">/api → /admin/*</text>
+
+      <!-- badges -->
+      <g class="badge r"><circle cx="250" cy="112" r="10"/><text x="250" y="112">R1</text></g>
+      <g class="badge r"><circle cx="266" cy="134" r="10"/><text x="266" y="134">R6</text></g>
+      <g class="badge r"><circle cx="250" cy="186" r="10"/><text x="250" y="186">R7</text></g>
+      <g class="badge r"><circle cx="262" cy="236" r="10"/><text x="262" y="236">R8</text></g>
+      <g class="badge m"><circle cx="264" cy="262" r="10"/><text x="264" y="262">M1</text></g>
+      <g class="badge r"><circle cx="803" cy="104" r="10"/><text x="803" y="104">R5</text></g>
+      <g class="badge r"><circle cx="806" cy="176" r="10"/><text x="806" y="176">R3</text></g>
+      <g class="badge m"><circle cx="806" cy="230" r="10"/><text x="806" y="230">M2</text></g>
+      <g class="badge r"><circle cx="806" cy="328" r="10"/><text x="806" y="328">R2</text></g>
+      <g class="badge r"><circle cx="806" cy="372" r="10"/><text x="806" y="372">R4</text></g>
+      <g class="badge i"><circle cx="811" cy="470" r="10"/><text x="811" y="470">I3</text></g>
+      <g class="badge i"><circle cx="806" cy="716" r="10"/><text x="806" y="716">I4</text></g>
+      <g class="badge i"><circle cx="262" cy="688" r="10"/><text x="262" y="688">I1</text></g>
+      <g class="badge i"><circle cx="262" cy="766" r="10"/><text x="262" y="766">I2</text></g>
+      <g class="badge m"><circle cx="257" cy="468" r="10"/><text x="257" y="468">M3</text></g>
+      <g class="badge m"><circle cx="402" cy="406" r="10"/><text x="402" y="406">M4</text></g>
+    </svg>
+  </div>
+
+  <section class="flows" aria-label="Flows">
+    <article class="flow" style="--c: var(--idx)">
+      <h2><i></i>Indexing</h2>
+      <p>Runs in <code>ingest</code> on start-up and every <code>INGEST_INTERVAL_SECONDS</code>.</p>
+      <ol>
+        <li><span class="step">I1</span><div><b>Read repositories.</b> GitLab REST API with a read-only token (or local folders for the sample repos). Repos and their <code>access_scope</code> come from <code>config/sources.yaml</code>.</div></li>
+        <li><span class="step">I2</span><div><b>Read standards.</b> The approved coding standard, split into one chunk per clause with version and section path.</div></li>
+        <li><span class="step">I3</span><div><b>Embed changed files only.</b> Unchanged fingerprints are skipped; new chunks go to Voyage <code>voyage-code-3</code> in batches.</div></li>
+        <li><span class="step">I4</span><div><b>Write to Atlas.</b> Chunks with embeddings, file content and fingerprints, the run record. Creates <code>chunks_vector</code> and <code>chunks_text</code> if missing.</div></li>
+      </ol>
+    </article>
+    <article class="flow" style="--c: var(--req)">
+      <h2><i></i>IDE request</h2>
+      <p>One developer question in Continue, end to end.</p>
+      <ol>
+        <li><span class="step">R1</span><div><b>Ask.</b> Continue sends the conversation, open file and selection to <code>/v1/chat/completions</code> with the developer's token.</div></li>
+        <li><span class="step">R2</span><div><b>Embed the question.</b> Voyage, <code>input_type=query</code>.</div></li>
+        <li><span class="step">R3</span><div><b>Search Atlas.</b> <code>$vectorSearch</code> and <code>$search</code> in parallel, both pre-filtered to the developer's scopes, then fused.</div></li>
+        <li><span class="step">R4</span><div><b>Rerank.</b> Voyage <code>rerank-2.5</code> orders the candidates; top-k code plus standard clauses are kept.</div></li>
+        <li><span class="step">R5</span><div><b>Call OpenAI.</b> Grounded prompt with labelled sources [S1…] and rules; tool calls pass through.</div></li>
+        <li><span class="step">R6</span><div><b>Stream back.</b> Answer with <code>[S# path:lines]</code> citations and a Sources list.</div></li>
+        <li><span class="step">R7</span><div><b>Review and apply.</b> The developer accepts the diff; Continue merges it via <code>repo-agent-apply</code>. The agent never writes to a repo.</div></li>
+        <li><span class="step">R8</span><div><b>Agent-mode tools.</b> <code>search_code</code>, <code>search_standards</code>, <code>get_file</code>, <code>list_repos</code> over <code>/mcp</code>, same permissions.</div></li>
+      </ol>
+    </article>
+    <article class="flow" style="--c: var(--mon)">
+      <h2><i></i>Telemetry and monitoring</h2>
+      <p>What the console shows and where it comes from.</p>
+      <ol>
+        <li><span class="step">M1</span><div><b>Outcomes from the IDE.</b> Continue's dev-data export posts accept / reject and feedback events, with <code>level: noCode</code>.</div></li>
+        <li><span class="step">M2</span><div><b>Usage events.</b> Every request writes latency per stage, tokens, cost, sources, citations and permission-hidden counts. The rollup job aggregates them hourly.</div></li>
+        <li><span class="step">M3</span><div><b>Open the console.</b> An admin signs in to <code>web-ui</code> on port 8080 with an admin token.</div></li>
+        <li><span class="step">M4</span><div><b>Read metrics.</b> nginx proxies <code>/api</code> to <code>/admin/*</code>, which reads rollups, events, outcomes, eval runs and the audit log.</div></li>
+      </ol>
+    </article>
+  </section>
+
+  <section class="ref">
+    <h2>Components</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Component</th><th>Runs where</th><th>Responsibility</th></tr></thead>
+      <tbody>
+        <tr><td>Continue.dev</td><td class="where">Developer IDE</td><td>Chat, edit and apply UI. Treats agent-api as an OpenAI model; MCP client; dev-data export.</td></tr>
+        <tr><td>agent-api</td><td class="where">Compose :8000</td><td>Auth by token, action classification, permission-aware hybrid retrieval, prompt building, OpenAI streaming, MCP server, telemetry intake, admin API, hourly rollups.</td></tr>
+        <tr><td>ingest</td><td class="where">Compose</td><td>Incremental indexing of GitLab repos and standards: fingerprint, tree-sitter chunking, Voyage embeddings, Atlas upsert and index creation.</td></tr>
+        <tr><td>web-ui</td><td class="where">Compose :8080</td><td>nginx serving the monitoring console and Playground; proxies <code>/api</code> to agent-api.</td></tr>
+        <tr><td>eval · seed</td><td class="where">Compose, on demand</td><td>Scores the agent against <code>eval/questions.yaml</code>; generates flagged synthetic usage for demos.</td></tr>
+        <tr><td>MongoDB Atlas</td><td class="where">Atlas cluster</td><td>Vector Search and Atlas Search over chunks; time-series usage events with TTL; rollups, outcomes, files, ingest and eval history, audit.</td></tr>
+        <tr><td>Voyage AI</td><td class="where">API</td><td><code>voyage-code-3</code> document and query embeddings; <code>rerank-2.5</code> reranking.</td></tr>
+        <tr><td>OpenAI</td><td class="where">API</td><td>Chat Completions model that writes the grounded answer.</td></tr>
+        <tr><td>GitLab</td><td class="where">Customer on-prem</td><td>Source of private repositories, read through a dedicated read-only token.</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="ref">
+    <h2>Data boundaries to confirm</h2>
+    <div class="boundary">
+      <div><b>Leaves the customer network</b>Code chunks and standard clauses go to Voyage (embedding, rerank) and to OpenAI as prompt context.</div>
+      <div><b>Stored in Atlas</b>Chunk text, embeddings, file content for <code>get_file</code>, and usage telemetry. No prompt text unless <code>LOG_PROMPTS=true</code>.</div>
+      <div><b>Stays on-prem</b>GitLab itself, the developers' machines, and every write to a repository: the agent is read-only.</div>
+    </div>
+  </section>
+</div>
+
+</body></html>

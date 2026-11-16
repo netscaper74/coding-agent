@@ -1,0 +1,68 @@
+# Continue.dev configuration for the Repo Agent demo.
+# Put this file in ~/.continue/config.yaml (or add it as a local agent/assistant in Continue),
+# then replace REPO_AGENT_TOKEN with your personal token from config/users.yaml.
+name: Repo Agent
+version: 1.0.0
+schema: v1
+
+models:
+  # Chat and edit go through the agent-api: it retrieves the relevant code and standards
+  # (only from repos you are allowed to see), grounds the prompt, then calls OpenAI.
+  - name: Repo Agent
+    provider: openai
+    model: repo-agent
+    apiBase: http://localhost:8000/v1
+    apiKey: dev-alice-7f3k2
+    roles: [chat, edit]
+    requestOptions:
+      headers:
+        X-Client-IDE: vscode          # set to jetbrains in IntelliJ / PyCharm
+    defaultCompletionOptions:
+      contextLength: 128000
+      maxTokens: 4000
+
+  # Apply merges an accepted suggestion into your file. No retrieval needed, so it uses
+  # the pass-through model (still logged for usage and cost).
+  - name: Repo Agent (apply)
+    provider: openai
+    model: repo-agent-apply
+    apiBase: http://localhost:8000/v1
+    apiKey: dev-alice-7f3k2
+    roles: [apply]
+    requestOptions:
+      headers:
+        X-Client-IDE: vscode
+
+# Editor context Continue may attach to your messages. `codebase` is intentionally not
+# listed: repository retrieval comes from Atlas, filtered by your permissions.
+context:
+  - provider: file
+  - provider: currentFile
+  - provider: code
+  - provider: diff
+  - provider: open
+  - provider: terminal
+  - provider: problems
+
+rules:
+  - Cite repository sources with the labels the agent provides, e.g. [S2 src/ledger/post.py:41-88].
+  - Never apply a change without showing me the diff first.
+
+# Read-only tools for agent mode (and any other MCP-capable client).
+mcpServers:
+  - name: repo-knowledge
+    type: streamable-http
+    url: http://localhost:8000/mcp
+    requestOptions:
+      headers:
+        Authorization: Bearer dev-alice-7f3k2
+
+# Outcome events (accepted / rejected edits, thumbs up/down) for the monitoring dashboard.
+# level: noCode keeps code and prompts out of the telemetry.
+data:
+  - name: repo-agent-telemetry
+    destination: http://localhost:8000/continue/events
+    schema: 0.2.0
+    level: noCode
+    apiKey: dev-alice-7f3k2
+    events: [editOutcome, nextEditOutcome, chatFeedback, autocomplete, toolUsage]

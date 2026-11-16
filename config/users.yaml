@@ -1,0 +1,25 @@
+# Demo identities. Each developer puts their token in Continue's config.yaml.
+# Replace these tokens before showing the demo to anyone outside your team.
+# In production, resolve the developer's identity and groups from GitLab or SSO instead.
+
+users:
+  - token: dev-alice-7f3k2
+    user: alice
+    name: Alice Haddad
+    team: payments
+    groups: ["group:finance", "group:engineering"]
+    role: developer
+
+  - token: dev-bob-9q1m8
+    user: bob
+    name: Bob Nakamura
+    team: web
+    groups: ["group:engineering"]
+    role: developer
+
+  - token: admin-demo-4x8p6
+    user: admin
+    name: Platform Admin
+    team: platform
+    groups: ["group:finance", "group:engineering"]
+    role: admin

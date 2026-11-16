@@ -1,0 +1,58 @@
+name: coding-agent-demo
+
+x-app: &app
+  build: .
+  image: coding-agent-demo:latest
+  env_file: .env
+  environment:
+    CONFIG_DIR: /config
+  volumes:
+    - ./config:/config:ro
+    - ./sample-repos:/data/sample-repos:ro
+    - ./standards:/data/standards:ro
+    - ./eval:/eval:ro
+  restart: unless-stopped
+
+services:
+  # Indexes the configured repos + standards into Atlas, then re-checks every INGEST_INTERVAL_SECONDS.
+  ingest:
+    <<: *app
+    command: ["python", "-m", "codeagent.ingest"]
+
+  # OpenAI-compatible endpoint for Continue (/v1), MCP server (/mcp), telemetry and admin API.
+  agent-api:
+    <<: *app
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # Monitoring dashboard + playground (static files served by nginx, /api proxied to agent-api).
+  web-ui:
+    image: nginx:1.27-alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./web-ui:/usr/share/nginx/html:ro
+      - ./web-ui/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      agent-api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # One-shot tools:  docker compose run --rm eval   |   docker compose run --rm seed [--purge]
+  eval:
+    <<: *app
+    profiles: ["tools"]
+    restart: "no"
+    command: ["python", "-m", "codeagent.eval"]
+
+  seed:
+    <<: *app
+    profiles: ["tools"]
+    restart: "no"
+    entrypoint: ["python", "-m", "codeagent.seed"]
+    command: []
