@@ -24,6 +24,11 @@ Docker Compose.
  developer reviews and applies every change (agent is read-only)
 ```
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/architecture-dark.svg">
+  <img alt="Animated architecture: indexing, IDE request and monitoring flows" src="docs/architecture-light.svg" width="100%">
+</picture>
+
 ## What's in the box
 
 | Service | Port | What it does |
