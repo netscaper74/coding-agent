@@ -12,7 +12,7 @@ Docker Compose.
 ```
  INDEX KNOWLEDGE
  GitLab / sample repos ─┐
- coding standards (MD) ─┴─► ingest ── tree-sitter chunks ── Voyage voyage-code-3 ──► Atlas: chunks
+ coding standards (MD) ─┴─► ingest ── tree-sitter chunks ── Voyage voyage-code-4 ──► Atlas: chunks
                             (incremental, per-file fingerprints)           (vector index + text index)
 
  ASSIST IN THE IDE
@@ -73,7 +73,7 @@ Then:
 
 Change the tokens in `config/users.yaml` before you show this to anyone outside your team.
 
-## Demo script (≈10 minutes)
+## Sample Demo script to test the App
 
 1. **Explain across the repo** — as Alice: *"Where are journal entries validated before
    posting, and which rules are enforced?"* → answer cites `[S1 src/ledger/validation.py:…]`
@@ -150,7 +150,7 @@ Continue's `data` block posts outcome events (accepted/rejected edits, thumbs) t
 - `config/pricing.yaml` — USD per 1M tokens for the Cost page.
 - `eval/questions.yaml` — eval set.
 
-## Things to verify before a customer demo
+## Things to verify before a demo
 
 - **Continue config keys.** `mcpServers` with `type: streamable-http`, and the `data`
   block (`destination`, `schema`, `level`, `events`) follow Continue's current YAML
